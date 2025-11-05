@@ -1,0 +1,6 @@
+wxPython
+paramiko
+keyring
+accessible-output2==0.16
+pyinstaller
+pyinstaller_versionfile
