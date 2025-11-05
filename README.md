@@ -39,7 +39,7 @@ Here are the instructions for running Teatype from its source code on Windows.
     * [Download Python 3.8 (32-bit) for Windows 7](https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe)
 2.  Download and install Git for Windows.
     * [Download the latest Git for Windows](https://github.com/git-for-windows/git/releases/download/v2.51.2.windows.1/Git-2.51.2-64-bit.exe)
-    * [Download Git for Windows 7](GitWindows7.exe)
+    * [Download Git for Windows 7](https://github.com/seediffusion/teatype/raw/refs/heads/main/GitWindows7.exe)
 3.  Press Windows + R, type `cmd`, and hit Enter to open a command prompt.
 4.  Clone this repository with git.
     ```
