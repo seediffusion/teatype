@@ -112,7 +112,7 @@ Upon connecting and logging into a server, the  graphical TTY view will open  an
 
 ## The file browser
 
-Clicking the browse files button in the TTY view will open a file browser window. This allows you to view, edit, upload and download files and folders via SFTP. When you arrow up and down through the list, Teatype will show you the name of the item, the item's size, and whether it is a file or a directory (folder). Press Enter to go into a folder, and Backspace to go back to the parent folder.
+Clicking the browse files button or pressing Alt + B in the TTY view will open a file browser window. This allows you to view, edit, upload and download files and folders via SFTP. When you arrow up and down through the list, Teatype will show you the name of the item, the item's size, and whether it is a file or a directory (folder). Press Enter to go into a folder, and Backspace to go back to the parent folder.
 
 ### Editing files
 
@@ -127,8 +127,16 @@ There are 2 ways of uploading files and folders to your server.
 
 ### Downloading files and folders
 
-* Copy the file or folder from the file browser and paste it someone in your local file system.
+* Copy the file or folder from the file browser and paste it somewhere in your local file system.
 * Click the download button and choose where to save the file or folder on your machine.
+
+### Deleting files and folders
+
+Pressing the Delete key, using the Alt + D shortcut or clicking the delete button will allow you to delete a file or folder. If you want to delete the item, hit yes on the confirmation prompt.
+
+### Creating new files and folders
+
+Pressing Alt + N will bring up a context menu where you can choose to create a file or a directory. Simply enter a name for your file or directory and hit Enter to create.
 
 ## Disabling screen reader feedback
 
