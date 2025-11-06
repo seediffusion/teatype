@@ -1,3 +1,5 @@
+# --- START OF FILE dialogs.py ---
+
 import wx
 import theme
 import stat
@@ -6,6 +8,21 @@ import threading
 import tempfile
 import shutil
 from sftp_helpers import upload_item, download_item, delete_item
+
+def human_readable_size(size_bytes):
+    """Converts a size in bytes to a human-readable format."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    import math
+    try:
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 1)
+        return f"{s} {size_name[i]}"
+    except (ValueError, IndexError):
+        return str(size_bytes)
+
 
 class AddServerDialog(wx.Dialog):
     def __init__(self, parent, title="Add SSH Server", server_to_edit=None):
@@ -140,12 +157,9 @@ class FileBrowserDialog(wx.Dialog):
     def __init__(self, parent, sftp_client, edit_callback):
         super(FileBrowserDialog, self).__init__(parent, title="SFTP File Browser", size=(600, 480))
         
-        self.sftp = sftp_client
-        self.current_path = self.sftp.getcwd() or "/"
-        self.edit_callback = edit_callback
-        self.progress_dialog = None
-        self.copy_temp_dir = None
-
+        self.sftp, self.current_path, self.edit_callback = sftp_client, sftp_client.getcwd() or "/", edit_callback
+        self.progress_dialog, self.copy_temp_dir = None, None
+        
         panel = wx.Panel(self)
         self.vbox = wx.BoxSizer(wx.VERTICAL)
         self.path_text = wx.StaticText(panel, label=self.current_path)
@@ -157,14 +171,16 @@ class FileBrowserDialog(wx.Dialog):
         self.vbox.Add(self.file_list, 1, wx.ALL|wx.EXPAND, 5)
         
         hbox_buttons = wx.BoxSizer(wx.HORIZONTAL)
-        self.upload_button = wx.Button(panel, label="Upload")
-        self.download_button = wx.Button(panel, label="Download")
-        self.copy_button = wx.Button(panel, label="Copy")
-        self.edit_button = wx.Button(panel, label="Edit")
-        self.delete_button = wx.Button(panel, label="Delete")
-        close_button = wx.Button(panel, label="Close", id=wx.ID_CANCEL)
+        self.upload_button = wx.Button(panel, label="&Upload")
+        self.new_button = wx.Button(panel, label="&New...")
+        self.download_button = wx.Button(panel, label="&Download")
+        self.copy_button = wx.Button(panel, label="&Copy")
+        self.edit_button = wx.Button(panel, label="&Edit")
+        self.delete_button = wx.Button(panel, label="&Delete")
+        close_button = wx.Button(panel, label="&Close", id=wx.ID_CANCEL)
         
         hbox_buttons.Add(self.upload_button)
+        hbox_buttons.Add(self.new_button, flag=wx.LEFT, border=5)
         hbox_buttons.Add(self.download_button, flag=wx.LEFT, border=5)
         hbox_buttons.Add(self.copy_button, flag=wx.LEFT, border=5)
         hbox_buttons.Add(self.edit_button, flag=wx.LEFT, border=5)
@@ -177,12 +193,14 @@ class FileBrowserDialog(wx.Dialog):
         self.vbox.Add(self.status_text, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND, 5)
         panel.SetSizer(self.vbox)
 
+        self.Bind(wx.EVT_ACTIVATE, self.on_activate)
         self.file_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
         self.file_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_selection_changed)
         self.file_list.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_selection_changed)
         self.file_list.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
         self.edit_button.Bind(wx.EVT_BUTTON, self.on_edit_button)
         self.upload_button.Bind(wx.EVT_BUTTON, self.on_upload)
+        self.new_button.Bind(wx.EVT_BUTTON, self.on_new)
         self.download_button.Bind(wx.EVT_BUTTON, self.on_download)
         self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
         self.delete_button.Bind(wx.EVT_BUTTON, self.on_delete)
@@ -190,6 +208,30 @@ class FileBrowserDialog(wx.Dialog):
 
         theme.apply_dark_theme(self)
         self.populate_files()
+
+    def on_activate(self, event):
+        if event.GetActive():
+            self.populate_files()
+        event.Skip()
+
+    def populate_files(self):
+        self.path_text.SetLabel(f"Path: {self.current_path}")
+        self.file_list.DeleteAllItems()
+        if self.current_path != "/":
+            index = self.file_list.InsertItem(self.file_list.GetItemCount(), "..")
+            self.file_list.SetItem(index, 2, "Parent Directory")
+        try:
+            for attr in self.sftp.listdir_attr(self.current_path):
+                index = self.file_list.InsertItem(self.file_list.GetItemCount(), attr.filename)
+                self.file_list.SetItem(index, 1, human_readable_size(attr.st_size))
+                file_mode = attr.st_mode
+                if stat.S_ISDIR(file_mode):
+                    self.file_list.SetItem(index, 2, "Directory")
+                else:
+                    self.file_list.SetItem(index, 2, "File")
+        except Exception as e:
+            wx.MessageBox(f"Could not list directory: {e}", "SFTP Error", wx.ICON_ERROR)
+        self.on_selection_changed(None)
 
     def on_close(self, event):
         if self.copy_temp_dir and os.path.exists(self.copy_temp_dir):
@@ -275,7 +317,7 @@ class FileBrowserDialog(wx.Dialog):
         try:
             for i, local_path in enumerate(local_paths):
                 filename = os.path.basename(local_path)
-                remote_path = f"{self.current_path}/{filename}"
+                remote_path = f"{self.current_path}/{filename}" if self.current_path != "/" else f"/{filename}"
                 wx.CallAfter(self.progress_dialog.Update, 0, f"Uploading {filename} ({i+1}/{len(local_paths)})...")
                 def progress_callback(transferred, total):
                     if self.progress_dialog:
@@ -363,23 +405,6 @@ class FileBrowserDialog(wx.Dialog):
             else: paths.append(f"{self.current_path}/{name}")
         return paths
         
-    def populate_files(self):
-        self.path_text.SetLabel(f"Path: {self.current_path}")
-        self.file_list.DeleteAllItems()
-        if self.current_path != "/":
-            index = self.file_list.InsertItem(self.file_list.GetItemCount(), "..")
-            self.file_list.SetItem(index, 2, "Parent Directory")
-        try:
-            for attr in self.sftp.listdir_attr(self.current_path):
-                index = self.file_list.InsertItem(self.file_list.GetItemCount(), attr.filename)
-                self.file_list.SetItem(index, 1, str(attr.st_size))
-                file_mode = attr.st_mode
-                if stat.S_ISDIR(file_mode): self.file_list.SetItem(index, 2, "Directory")
-                else: self.file_list.SetItem(index, 2, "File")
-        except Exception as e:
-            wx.MessageBox(f"Could not list directory: {e}", "SFTP Error", wx.ICON_ERROR)
-        self.on_selection_changed(None)
-        
     def on_item_activated(self, event):
         item_text = event.GetText()
         item_type = self.file_list.GetItemText(event.GetIndex(), col=2)
@@ -394,11 +419,44 @@ class FileBrowserDialog(wx.Dialog):
         remote_paths = self.get_selected_remote_paths()
         if remote_paths:
             self.edit_callback(remote_paths[0])
-            # self.Close() <-- This line is removed to keep the browser open.
+            # self.Close() # This is correctly removed now.
 
-    def on_paste_upload(self):
+    def on_paste_upload(self, event):
         data = wx.FileDataObject()
         if wx.TheClipboard.Open():
             success = wx.TheClipboard.GetData(data)
             wx.TheClipboard.Close()
             if success: self.start_upload_thread(data.GetFilenames())
+
+    def on_new(self, event):
+        menu = wx.Menu()
+        dir_item = menu.Append(wx.ID_ANY, "Directory")
+        file_item = menu.Append(wx.ID_ANY, "File")
+        self.Bind(wx.EVT_MENU, self.on_new_directory, dir_item)
+        self.Bind(wx.EVT_MENU, self.on_new_file, file_item)
+        self.PopupMenu(menu)
+
+    def on_new_directory(self, event):
+        with wx.TextEntryDialog(self, "Enter name for the new directory:", "Create Directory") as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
+                name = dlg.GetValue().strip()
+                if not name: return
+                remote_path = f"{self.current_path}/{name}" if self.current_path != "/" else f"/{name}"
+                try:
+                    self.sftp.mkdir(remote_path)
+                    self.populate_files()
+                except Exception as e:
+                    wx.MessageBox(f"Failed to create directory: {e}", "Error", wx.ICON_ERROR)
+
+    def on_new_file(self, event):
+        with wx.TextEntryDialog(self, "Enter name for the new file:", "Create File") as dlg:
+            if dlg.ShowModal() == wx.ID_OK:
+                name = dlg.GetValue().strip()
+                if not name: return
+                remote_path = f"{self.current_path}/{name}" if self.current_path != "/" else f"/{name}"
+                try:
+                    with self.sftp.open(remote_path, 'w') as f:
+                        pass
+                    self.populate_files()
+                except Exception as e:
+                    wx.MessageBox(f"Failed to create file: {e}", "Error", wx.ICON_ERROR)

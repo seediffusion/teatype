@@ -17,45 +17,35 @@ ANSI_ESCAPE_RE = re.compile(r'(\x1B\[[0-?]*[ -/]*[@-~]|\x1B\].*?(\x07|\x1B\\))')
 
 class TerminalFrame(wx.Frame, SettingsMenuMixin):
     def __init__(self, parent, server_info, connect_kwargs):
+        # ... (init setup is the same) ...
         self.server_info = server_info
         self.connect_kwargs = connect_kwargs
-        # --- FIX: Renamed application ---
         title = f"Teatype TTY - {server_info['name']} ({server_info['user']}@{server_info['host']})"
         super(TerminalFrame, self).__init__(parent, title=title, size=(800, 600))
-        
         SettingsMenuMixin.__init__(self)
-
         self.sftp_client = None
-        # --- FIX: Renamed temp dir prefix ---
         self.temp_dir = tempfile.mkdtemp(prefix="teatype_")
         self.open_files = set()
-
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
-
         output_label = wx.StaticText(panel, label="&Server Output:")
         sizer.Add(output_label, 0, wx.LEFT | wx.TOP, 5)
-        
         self.output_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.output_ctrl.SetFont(font)
         sizer.Add(self.output_ctrl, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        self.browse_files_btn = wx.Button(panel, label="Browse Files (SFTP)")
+        # --- FIX: Added shortcut to button label ---
+        self.browse_files_btn = wx.Button(panel, label="&Browse Files (SFTP)")
         self.browse_files_btn.Disable()
         hbox.Add(self.browse_files_btn)
         sizer.Add(hbox, 0, wx.ALIGN_CENTER | wx.BOTTOM, 5)
-        
         input_label = wx.StaticText(panel, label="&Command Input:")
         sizer.Add(input_label, 0, wx.LEFT, 5)
-        
         self.input_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER)
         self.input_ctrl.SetFont(font)
         sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        
         panel.SetSizer(sizer)
-        
         theme.apply_dark_theme(self)
         self.output_ctrl.SetBackgroundColour(wx.BLACK)
         self.output_ctrl.SetForegroundColour(wx.WHITE)
@@ -65,33 +55,15 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
         self.ssh_channel = None
         self.command_queue = queue.Queue()
         self.stop_event = threading.Event()
-        
         self.Bind(wx.EVT_TEXT_ENTER, self.on_command_enter, self.input_ctrl)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.input_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
         self.browse_files_btn.Bind(wx.EVT_BUTTON, self.on_browse_files)
-
         self.input_ctrl.SetFocus()
         self.start_ssh_thread()
         self.Show()
 
-    def on_key_down(self, event):
-        key_code = event.GetKeyCode()
-        is_ctrl_down = event.ControlDown()
-
-        # Handle Ctrl+D (EOT)
-        if is_ctrl_down and key_code == ord('D'):
-            if self.ssh_channel: self.command_queue.put('\x04')
-            return # Event handled
-        
-        # --- FIX: Handle Ctrl+C (ETX / SIGINT) ---
-        elif is_ctrl_down and key_code == ord('C'):
-            if self.ssh_channel: self.command_queue.put('\x03')
-            return # Event handled
-
-        event.Skip()
-        
-    # ... (The rest of the file is unchanged) ...
+    # ... (all other methods are unchanged and correct) ...
     def on_browse_files(self, event):
         if self.sftp_client:
             with FileBrowserDialog(self, self.sftp_client, edit_callback=self.open_file_for_edit) as dlg:
@@ -124,6 +96,16 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
         if self.sftp_client: self.sftp_client.close()
         if self.ssh_client: self.ssh_client.close()
         self.Destroy()
+    def on_key_down(self, event):
+        key_code = event.GetKeyCode()
+        is_ctrl_down = event.ControlDown()
+        if is_ctrl_down and key_code == ord('D'):
+            if self.ssh_channel: self.command_queue.put('\x04')
+            return
+        elif is_ctrl_down and key_code == ord('C'):
+            if self.ssh_channel: self.command_queue.put('\x03')
+            return
+        event.Skip()
     def start_ssh_thread(self):
         self.ssh_thread = threading.Thread(target=self.ssh_worker)
         self.ssh_thread.daemon = True
