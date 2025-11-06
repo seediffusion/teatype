@@ -1,5 +1,3 @@
-# --- START OF FILE teatype.py ---
-
 import wx
 import json
 import os
@@ -16,37 +14,28 @@ SERVERS_FILE = "servers.json"
 
 class MainFrame(wx.Frame, SettingsMenuMixin):
     def __init__(self):
-        # --- FIX: Renamed application ---
         super().__init__(None, title="Teatype - Server Manager", size=(600, 400))
-        
         SettingsMenuMixin.__init__(self)
-        
         self.servers = []
-        
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
-
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.list_ctrl.InsertColumn(0, "Name", width=150)
         self.list_ctrl.InsertColumn(1, "Hostname", width=150)
         self.list_ctrl.InsertColumn(2, "Port", width=60)
         self.list_ctrl.InsertColumn(3, "Username", width=120)
         vbox.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 5)
-
         hbox = wx.BoxSizer(wx.HORIZONTAL)
         self.connect_btn = wx.Button(panel, label="&Connect")
         self.add_btn = wx.Button(panel, label="&Add")
         self.edit_btn = wx.Button(panel, label="&Edit")
         self.remove_btn = wx.Button(panel, label="&Remove")
-        
         hbox.Add(self.connect_btn)
         hbox.Add(self.add_btn, flag=wx.LEFT, border=5)
         hbox.Add(self.edit_btn, flag=wx.LEFT, border=5)
         hbox.Add(self.remove_btn, flag=wx.LEFT, border=5)
         vbox.Add(hbox, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.TOP, 5)
-        
         panel.SetSizer(vbox)
-
         self.Bind(wx.EVT_BUTTON, self.on_connect, self.connect_btn)
         self.Bind(wx.EVT_BUTTON, self.on_add, self.add_btn)
         self.Bind(wx.EVT_BUTTON, self.on_edit, self.edit_btn)
@@ -54,31 +43,40 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_connect)
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_selection_changed)
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_selection_changed)
-        
         theme.apply_dark_theme(self)
-        
         self.load_servers()
         self.populate_list()
         self.Centre()
         self.Show()
-    
-    # ... (The rest of the file is unchanged) ...
+
+    def update_server_last_path(self, server_name, last_path):
+        """Finds a server by name and updates its last_path."""
+        for server in self.servers:
+            if server.get("name") == server_name:
+                server["last_path"] = last_path
+                self.save_servers()
+                break
+
     def update_button_states(self):
         has_selection = self.list_ctrl.GetFirstSelected() != -1
         self.connect_btn.Enable(has_selection)
         self.remove_btn.Enable(has_selection)
         self.edit_btn.Enable(has_selection)
+        
     def on_selection_changed(self, event):
         self.update_button_states()
         event.Skip()
+        
     def load_servers(self):
         if os.path.exists(SERVERS_FILE):
             try:
                 with open(SERVERS_FILE, "r") as f: self.servers = json.load(f)
             except json.JSONDecodeError: self.servers = []
         else: self.servers = []
+        
     def save_servers(self):
         with open(SERVERS_FILE, "w") as f: json.dump(self.servers, f, indent=4)
+        
     def populate_list(self):
         self.list_ctrl.DeleteAllItems()
         for i, server in enumerate(self.servers):
@@ -87,6 +85,7 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
             self.list_ctrl.SetItem(i, 2, str(server["port"]))
             self.list_ctrl.SetItem(i, 3, server["user"])
         self.update_button_states()
+        
     def on_add(self, event):
         with AddServerDialog(self, title="Add SSH Server") as dlg:
             if dlg.ShowModal() == wx.ID_OK:
@@ -107,6 +106,7 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
                 self.servers.append(new_server)
                 self.save_servers()
                 self.populate_list()
+                
     def on_edit(self, event):
         selected_index = self.list_ctrl.GetFirstSelected()
         if selected_index == -1: return
@@ -124,20 +124,26 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
                         store_password(server_name=new_data["name"], host=new_data["host"], user=new_data["user"], password=new_data["password"])
                     elif new_data["auth_method"] == "key" and new_data["passphrase"]:
                         store_passphrase(server_name=new_data["name"], host=new_data["host"], user=new_data["user"], passphrase=new_data["passphrase"])
-                updated_server = {
+                
+                updated_server = original_server.copy()
+                updated_server.update({
                     "name": new_data["name"], "host": new_data["host"], "port": new_data["port"],
                     "user": new_data["user"], "auth_method": new_data["auth_method"],
                     "password_stored": new_data["store_credential"]
-                }
+                })
+
                 if new_data["auth_method"] == "key":
                     updated_server["key_path"] = new_data["key_path"]
                     if new_data["passphrase"]:
                         updated_server["has_passphrase"] = True
                     else:
-                        updated_server["has_passphrase"] = original_server.get("has_passphrase", False)
+                        # If the passphrase field was cleared, we must update has_passphrase
+                        updated_server["has_passphrase"] = False
+                
                 self.servers[selected_index] = updated_server
                 self.save_servers()
                 self.populate_list()
+
     def on_remove(self, event):
         selected_index = self.list_ctrl.GetFirstSelected()
         if selected_index != -1:
@@ -153,6 +159,7 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
                 self.servers.pop(selected_index)
                 self.save_servers()
                 self.populate_list()
+                
     def on_connect(self, event):
         selected_index = -1
         if isinstance(event, wx.ListEvent):
@@ -181,7 +188,7 @@ class MainFrame(wx.Frame, SettingsMenuMixin):
             if server_info.get("password_stored"):
                 passphrase = get_passphrase(server_name=server_info["name"], host=server_info["host"], user=server_info["user"])
             if passphrase is None and server_info.get("has_passphrase", False):
-                with wx.PasswordEntryDialog(self, f"Enter passphrase for key\n{server_info['key_path']}", "Passphrase Required") as dlg:
+                with wx.PasswordEntryDialog(self, f"Enter passphrase for key\n{server_info['key_path']}", "Passphrase Required", "Passphrase Required (leave blank if none)") as dlg:
                     if dlg.ShowModal() == wx.ID_OK: passphrase = dlg.GetValue()
                     else: return
             connect_kwargs['passphrase'] = passphrase

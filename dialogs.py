@@ -10,7 +10,6 @@ import shutil
 from sftp_helpers import upload_item, download_item, delete_item
 
 def human_readable_size(size_bytes):
-    """Converts a size in bytes to a human-readable format."""
     if size_bytes < 1024:
         return f"{size_bytes} B"
     size_name = ("B", "KB", "MB", "GB", "TB")
@@ -22,7 +21,6 @@ def human_readable_size(size_bytes):
         return f"{s} {size_name[i]}"
     except (ValueError, IndexError):
         return str(size_bytes)
-
 
 class AddServerDialog(wx.Dialog):
     def __init__(self, parent, title="Add SSH Server", server_to_edit=None):
@@ -154,12 +152,16 @@ class AddServerDialog(wx.Dialog):
         return data
 
 class FileBrowserDialog(wx.Dialog):
-    def __init__(self, parent, sftp_client, edit_callback):
+    def __init__(self, parent, sftp_client, edit_callback, initial_path=None):
         super(FileBrowserDialog, self).__init__(parent, title="SFTP File Browser", size=(600, 480))
         
-        self.sftp, self.current_path, self.edit_callback = sftp_client, sftp_client.getcwd() or "/", edit_callback
-        self.progress_dialog, self.copy_temp_dir = None, None
-        
+        self.sftp = sftp_client
+        # --- FIX: The initial path is now guaranteed to be valid if provided. ---
+        self.current_path = initial_path or "/"
+        self.edit_callback = edit_callback
+        self.progress_dialog = None
+        self.copy_temp_dir = None
+
         panel = wx.Panel(self)
         self.vbox = wx.BoxSizer(wx.VERTICAL)
         self.path_text = wx.StaticText(panel, label=self.current_path)
@@ -169,7 +171,6 @@ class FileBrowserDialog(wx.Dialog):
         self.file_list.InsertColumn(1, "Size", width=100)
         self.file_list.InsertColumn(2, "Type", width=100)
         self.vbox.Add(self.file_list, 1, wx.ALL|wx.EXPAND, 5)
-        
         hbox_buttons = wx.BoxSizer(wx.HORIZONTAL)
         self.upload_button = wx.Button(panel, label="&Upload")
         self.new_button = wx.Button(panel, label="&New...")
@@ -178,7 +179,6 @@ class FileBrowserDialog(wx.Dialog):
         self.edit_button = wx.Button(panel, label="&Edit")
         self.delete_button = wx.Button(panel, label="&Delete")
         close_button = wx.Button(panel, label="&Close", id=wx.ID_CANCEL)
-        
         hbox_buttons.Add(self.upload_button)
         hbox_buttons.Add(self.new_button, flag=wx.LEFT, border=5)
         hbox_buttons.Add(self.download_button, flag=wx.LEFT, border=5)
@@ -188,11 +188,9 @@ class FileBrowserDialog(wx.Dialog):
         hbox_buttons.AddStretchSpacer()
         hbox_buttons.Add(close_button)
         self.vbox.Add(hbox_buttons, 0, wx.ALL|wx.EXPAND, 5)
-        
         self.status_text = wx.StaticText(panel, label=" ")
         self.vbox.Add(self.status_text, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND, 5)
         panel.SetSizer(self.vbox)
-
         self.Bind(wx.EVT_ACTIVATE, self.on_activate)
         self.file_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
         self.file_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_selection_changed)
@@ -205,15 +203,16 @@ class FileBrowserDialog(wx.Dialog):
         self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
         self.delete_button.Bind(wx.EVT_BUTTON, self.on_delete)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-
         theme.apply_dark_theme(self)
         self.populate_files()
 
+    def get_current_path(self):
+        return self.current_path
+        
     def on_activate(self, event):
-        if event.GetActive():
-            self.populate_files()
+        if event.GetActive(): self.populate_files()
         event.Skip()
-
+        
     def populate_files(self):
         self.path_text.SetLabel(f"Path: {self.current_path}")
         self.file_list.DeleteAllItems()
@@ -231,6 +230,8 @@ class FileBrowserDialog(wx.Dialog):
                     self.file_list.SetItem(index, 2, "File")
         except Exception as e:
             wx.MessageBox(f"Could not list directory: {e}", "SFTP Error", wx.ICON_ERROR)
+            # If the path is invalid, fall back to root
+            self.current_path = "/"
         self.on_selection_changed(None)
 
     def on_close(self, event):
@@ -419,7 +420,6 @@ class FileBrowserDialog(wx.Dialog):
         remote_paths = self.get_selected_remote_paths()
         if remote_paths:
             self.edit_callback(remote_paths[0])
-            # self.Close() # This is correctly removed now.
 
     def on_paste_upload(self, event):
         data = wx.FileDataObject()

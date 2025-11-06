@@ -1,3 +1,5 @@
+# --- START OF FILE terminal_frame.py ---
+
 import wx
 import paramiko
 import threading
@@ -17,15 +19,15 @@ ANSI_ESCAPE_RE = re.compile(r'(\x1B\[[0-?]*[ -/]*[@-~]|\x1B\].*?(\x07|\x1B\\))')
 
 class TerminalFrame(wx.Frame, SettingsMenuMixin):
     def __init__(self, parent, server_info, connect_kwargs):
-        # ... (init setup is the same) ...
         self.server_info = server_info
         self.connect_kwargs = connect_kwargs
-        title = f"Teatype TTY - {server_info['name']} ({server_info['user']}@{server_info['host']})"
+        title = f"Teatype - {server_info['name']} ({server_info['user']}@{server_info['host']})"
         super(TerminalFrame, self).__init__(parent, title=title, size=(800, 600))
         SettingsMenuMixin.__init__(self)
         self.sftp_client = None
         self.temp_dir = tempfile.mkdtemp(prefix="teatype_")
         self.open_files = set()
+        self.sftp_last_path = self.server_info.get("last_path")
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
         output_label = wx.StaticText(panel, label="&Server Output:")
@@ -35,7 +37,6 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
         self.output_ctrl.SetFont(font)
         sizer.Add(self.output_ctrl, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        # --- FIX: Added shortcut to button label ---
         self.browse_files_btn = wx.Button(panel, label="&Browse Files (SFTP)")
         self.browse_files_btn.Disable()
         hbox.Add(self.browse_files_btn)
@@ -63,11 +64,12 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
         self.start_ssh_thread()
         self.Show()
 
-    # ... (all other methods are unchanged and correct) ...
     def on_browse_files(self, event):
         if self.sftp_client:
-            with FileBrowserDialog(self, self.sftp_client, edit_callback=self.open_file_for_edit) as dlg:
+            with FileBrowserDialog(self, self.sftp_client, self.open_file_for_edit, initial_path=self.sftp_last_path) as dlg:
                 dlg.ShowModal()
+                self.sftp_last_path = dlg.get_current_path()
+    
     def open_file_for_edit(self, remote_path):
         if remote_path in self.open_files:
             wx.MessageBox(f"This file is already open for editing.", "Already Open", wx.ICON_INFORMATION)
@@ -81,21 +83,27 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
             EditorFrame(self, title, local_path, remote_path, self.sftp_client)
         except Exception as e:
             wx.MessageBox(f"Failed to open file for editing: {e}", "SFTP Error", wx.ICON_ERROR)
+    
     def notify_editor_closed(self, remote_path):
         if remote_path in self.open_files:
             self.open_files.remove(remote_path)
+
     def on_close(self, event):
         try:
-            if os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir)
+            if os.path.exists(self.temp_dir): shutil.rmtree(self.temp_dir)
         except Exception as e:
             print(f"Warning: Could not remove temp directory {self.temp_dir}: {e}")
+        
+        if self.Parent and self.sftp_last_path:
+            self.Parent.update_server_last_path(self.server_info['name'], self.sftp_last_path)
+
         self.stop_event.set()
         if self.ssh_thread and self.ssh_thread.is_alive():
             self.ssh_thread.join(timeout=2)
         if self.sftp_client: self.sftp_client.close()
         if self.ssh_client: self.ssh_client.close()
         self.Destroy()
+        
     def on_key_down(self, event):
         key_code = event.GetKeyCode()
         is_ctrl_down = event.ControlDown()
@@ -106,10 +114,12 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
             if self.ssh_channel: self.command_queue.put('\x03')
             return
         event.Skip()
+        
     def start_ssh_thread(self):
         self.ssh_thread = threading.Thread(target=self.ssh_worker)
         self.ssh_thread.daemon = True
         self.ssh_thread.start()
+        
     def on_command_enter(self, event):
         if not wx.GetKeyState(wx.WXK_SHIFT):
             if self.ssh_channel:
@@ -120,23 +130,36 @@ class TerminalFrame(wx.Frame, SettingsMenuMixin):
             current_pos = self.input_ctrl.GetInsertionPoint()
             self.input_ctrl.WriteText('\n')
             self.input_ctrl.SetInsertionPoint(current_pos + 1)
+            
     def append_output(self, text):
         self.output_ctrl.AppendText(text)
         clean_text_for_speech = text.strip()
         if clean_text_for_speech:
             speak(clean_text_for_speech, interrupt=False)
+            
     def filter_control_characters(self, text: str) -> str:
         return "".join(c for c in text if c.isprintable() or c in ('\n', '\t'))
+        
     def ssh_worker(self):
         try:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             wx.CallAfter(self.append_output, f"Connecting to {self.connect_kwargs['hostname']}...\n")
             self.ssh_client.connect(**self.connect_kwargs, timeout=10)
+            
+            # --- FIX: Get the home directory reliably ---
+            # Use exec_command for a single, non-interactive command
+            stdin, stdout, stderr = self.ssh_client.exec_command('pwd')
+            home_dir = stdout.read().decode('utf-8').strip()
+            if home_dir and not self.sftp_last_path:
+                self.sftp_last_path = home_dir
+
             self.ssh_channel = self.ssh_client.invoke_shell(term='xterm')
             self.sftp_client = self.ssh_client.open_sftp()
+
             wx.CallAfter(self.append_output, "Connection established.\n")
             wx.CallAfter(self.browse_files_btn.Enable)
+            
             while not self.stop_event.is_set():
                 if self.ssh_channel.exit_status_ready(): break 
                 if self.ssh_channel.recv_ready():
