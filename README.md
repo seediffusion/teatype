@@ -6,7 +6,7 @@ Teatype is a portable, light-weight, powerful SSH client designed with sightless
 
 ## Full disclosure
 
-A large language model (LLM), specifically Google Gemini 2.5 Pro, was used to write this program. However, rest assured that the program has been thurroughly tested to ensure that it is as stable and reliable as possible.
+Large language models (LLMs), specifically Google Gemini 2.5 Pro and GPT 5.1, were used to write this program. However, rest assured that the program has been thurroughly tested to ensure that it is as stable and reliable as possible.
 
 ## What is SSH?
 
@@ -35,11 +35,9 @@ Here are the instructions for running Teatype from its source code on Windows.
 1.  Ensure you have Python installed.
     * [Download Python 3.13 (64-bit)](https://www.python.org/ftp/python/3.13.9/python-3.13.9-amd64.exe)
     * [Download Python 3.13 (32-bit)](https://www.python.org/ftp/python/3.13.9/python-3.13.9.exe)
-    * [Download Python 3.8 (64-bit) for Windows 7](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe)
-    * [Download Python 3.8 (32-bit) for Windows 7](https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe)
 2.  Download and install Git for Windows.
     * [Download the latest Git for Windows](https://github.com/git-for-windows/git/releases/download/v2.51.2.windows.1/Git-2.51.2-64-bit.exe)
-    * [Download Git for Windows 7](https://github.com/seediffusion/teatype/raw/refs/heads/main/GitWindows7.exe)
+    * [Download Git for Windows 7](GitWindows7.exe)
 3.  Press Windows + R, type `cmd`, and hit Enter to open a command prompt.
 4.  Clone this repository with git.
     ```
@@ -69,7 +67,7 @@ Here are the instructions for running Teatype from its source code on Windows.
 
 ### Compiled
 
-If you don't wanna mess with all that fancy dev stuff, you can simply [download the latest pre-compiled binary](https://github.com/seediffusion/Teatype/releases/latest/download/teatype.zip). This release works on both 32 and 64-bit versions of Windows 7 and higher.
+If you don't wanna mess with all that fancy dev stuff, you can simply [download the latest pre-compiled binary](https://github.com/seediffusion/Teatype/releases/latest/download/teatype.zip). This release works on 64-bit versions of Windows 8.1 and higher.
 Since Teatype is a portable program, everything the program needs to run is stored inside a single folder. all you have to do is extract the Teatype.zip file to a location of your choice using [7-Zip](https://7-zip.org) or your favourite zip archiver.
 To start the program, simply launch the teatype.exe file. If Windows isn't set up to show file extensions, you won't see the .exe part.
 
@@ -95,11 +93,15 @@ Press Enter on a server in the list, hit the Connect button or press Alt + C to 
 
 ### Editing a server
 
-Click the edit button on a server or press Alt + E. This brings up a dialog similar to the add server dialog, but you can makes changes to a server's details as needed. Hit save when you're done.
+Click the edit button on a server or press Alt + E. This brings up a dialog similar to the add server dialog, but you can make changes to a server's details as needed. Hit save when you're done.
 
 ### Deleting a server
 
 Hit the remove button on a server or press Alt + R, then hit yes to confirm the deletion.
+
+### A note on SSH keys and password storage
+
+Unlike other clients that rely on having an SSH agent running to store and retrieve SSH key passphrases, Teatype bypasses this by using the operating system's credential manager. The same applies to standard passwords. This is why, if you chose to store your password/passphrase on one computer and transfer Teatype to another machine, you will be asked for that password/passphrase again.
 
 ## The TTY
 
@@ -112,7 +114,7 @@ Upon connecting and logging into a server, the  graphical TTY view will open  an
 
 ## The file browser
 
-Clicking the browse files button or pressing Alt + B in the TTY view will open a file browser window. This allows you to view, edit, upload and download files and folders via SFTP. When you arrow up and down through the list, Teatype will show you the name of the item, the item's size, and whether it is a file or a directory (folder). Press Enter to go into a folder, and Backspace to go back to the parent folder.
+Clicking the browse files button or pressing Alt + B in the TTY view will open Teatype's built-in SFTP file browser, known as Teaview. This allows you to view, edit, upload and download files and folders via SFTP. When you arrow up and down through the list, Teatype will show you the name of the item, the item's size, and whether it is a file or a directory (folder). Press Enter to go into a folder, and Backspace to go back to the parent folder.
 
 ### Editing files
 
@@ -122,13 +124,13 @@ Editing files is as simple as pressing Enter on a file to have it open in a text
 
 There are 2 ways of uploading files and folders to your server.
 
-* You can copy the file or folder from your local machine and paste it into the file browser in Teatype.
-* You can hit the upload button to browse your local machine for a file to upload.
+* You can copy the file or folder from your local machine and paste it into Teaview.
+* You can hit the upload button or press Alt + U to browse your local machine for a file to upload.
 
 ### Downloading files and folders
 
 * Copy the file or folder from the file browser and paste it somewhere in your local file system.
-* Click the download button and choose where to save the file or folder on your machine.
+* Click the download button, Alt + L, and choose where to save the file or folder on your machine.
 
 ### Deleting files and folders
 
@@ -137,6 +139,10 @@ Pressing the Delete key, using the Alt + D shortcut or clicking the delete butto
 ### Creating new files and folders
 
 Pressing Alt + N will bring up a context menu where you can choose to create a file or a directory. Simply enter a name for your file or directory and hit Enter to create.
+
+### A note on file transfers
+
+During a file transfer process, Screen reader users can press Shift + Alt + P at any time to hear the current transfer progress.
 
 ## Disabling screen reader feedback
 
