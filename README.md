@@ -111,6 +111,7 @@ Upon connecting and logging into a server, the  graphical TTY view will open  an
 * Press Shift + Enter to create a new line for long commands that require multiple lines.
 * Press Control + C to send an interrupt signal and stop a running foreground process.
 * Press Control + D to send an end-of-transmission signal. If you're not in any interactive shell sessions, such as an SQL prompt or similar, this will log you out of the server.
+* Press the Up Arrow to auto fill the last command that was executed. Teatype keeps a history of the last 25 executed commands, so you can up and down arrow to scroll through them and repeat a command or modify as needed.
 
 ## The file browser
 
